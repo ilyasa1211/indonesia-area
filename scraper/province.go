@@ -39,8 +39,11 @@ const (
 	PROVINCE_AREA_CODE
 )
 
-func ScrapeProvince(c *colly.Collector, selector string, page uint, limit uint, writer *csv.Writer) {
+func ScrapeProvince(c *colly.Collector, url string, selector string, writer *csv.Writer) {
 	utils.SetProperHeader(c)
+	utils.SetErrorHandling(c)
+
+	defer writer.Flush()
 
 	c.OnHTML(selector, func(h *colly.HTMLElement) {
 		provinceCount := h.DOM.Children().Length() - 1
@@ -75,11 +78,12 @@ func ScrapeProvince(c *colly.Collector, selector string, page uint, limit uint, 
 				totalIsland,
 				areaCode,
 			})
+
 			if err != nil {
 				log.Fatalln("Failed to write CSV row:", err)
 			}
 		})
 	})
 
-	writer.Flush()
+	c.Visit(url)
 }

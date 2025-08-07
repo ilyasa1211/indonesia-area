@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/gocolly/colly/v2"
+	"github.com/ilyasa1211/indonesia-area/utils"
 )
 
 type VillageData struct {
@@ -25,32 +26,40 @@ const (
 	VILLAGE_AREA_CODE
 )
 
-func ScrapeVillage(e *colly.HTMLElement, writer *csv.Writer) {
-	villageCount := e.DOM.Children().Length() - 1
+func ScrapeVillage(c *colly.Collector, url string, selector string, writer *csv.Writer) {
+	utils.SetProperHeader(c)
+	utils.SetErrorHandling(c)
 
-	e.ForEach("tr", func(i int, h *colly.HTMLElement) {
-		// skip last row
-		if i >= villageCount {
-			return
-		}
-		child := h.DOM.Children()
+	defer writer.Flush()
 
-		name := child.Eq(VILLAGE_NAME).Text()
-		index := child.Eq(VILLAGE_INDEX).Text()
-		postalCode := child.Eq(VILLAGE_POSTAL_CODE).Text()
-		areaCode := child.Eq(VILLAGE_AREA_CODE).Text()
+	c.OnHTML(selector, func(e *colly.HTMLElement) {
+		villageCount := e.DOM.Children().Length()
 
-		err := writer.Write([]string{
-			index,
-			name,
-			postalCode,
-			areaCode,
+		e.ForEach("tr", func(i int, h *colly.HTMLElement) {
+			// skip last row
+			if i >= villageCount {
+				return
+			}
+			child := h.DOM.Children()
+
+			name := child.Eq(VILLAGE_NAME).Text()
+			index := child.Eq(VILLAGE_INDEX).Text()
+			postalCode := child.Eq(VILLAGE_POSTAL_CODE).Text()
+			areaCode := child.Eq(VILLAGE_AREA_CODE).Text()
+
+			err := writer.Write([]string{
+				index,
+				name,
+				postalCode,
+				areaCode,
+			})
+
+			if err != nil {
+				log.Fatalln("Failed to write CSV row:", err)
+			}
 		})
 
-		if err != nil {
-			log.Fatalln("Failed to write CSV row:", err)
-		}
 	})
 
-	writer.Flush()
+	c.Visit(url)
 }

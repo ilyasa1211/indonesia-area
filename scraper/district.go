@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gocolly/colly/v2"
+	"github.com/ilyasa1211/indonesia-area/utils"
 )
 
 type DistrictData struct {
@@ -33,37 +34,45 @@ const (
 	DISTRICT_AREA_CODE
 )
 
-func ScrapeDistrict(e *colly.HTMLElement, writer *csv.Writer) {
-	districtCount := e.DOM.Children().Length() - 1
+func ScrapeDistrict(c *colly.Collector, url string, selector string, writer csv.Writer) {
+	utils.SetProperHeader(c)
+	utils.SetErrorHandling(c)
 
-	e.ForEach("tr", func(i int, h *colly.HTMLElement) {
-		// skip last row
-		if i >= districtCount {
-			return
-		}
+	defer writer.Flush()
 
-		child := h.DOM.Children()
+	c.OnHTML(selector, func(e *colly.HTMLElement) {
+		districtCount := e.DOM.Children().Length()
 
-		name := child.Eq(DISTRICT_NAME).Text()
-		index := child.Eq(DISTRICT_INDEX).Text()
-		totalVillage := strings.ReplaceAll(child.Eq(DISTRICT_TOTAL_VILLAGE).Text(), ".", "")
-		totalIsland := strings.ReplaceAll(child.Eq(DISTRICT_TOTAL_ISLAND).Text(), ".", "")
-		postalCode := strings.Split(child.Eq(DISTRICT_POSTAL_CODE).Text(), " - ")
-		areaCode := child.Eq(DISTRICT_AREA_CODE).Text()
+		e.ForEach("tr", func(i int, h *colly.HTMLElement) {
+			// skip last row
+			if i >= districtCount {
+				return
+			}
 
-		err := writer.Write([]string{
-			(index),
-			name,
-			(totalVillage),
-			(totalIsland),
-			areaCode,
-			strings.Join(postalCode, "-"),
+			child := h.DOM.Children()
+
+			name := child.Eq(DISTRICT_NAME).Text()
+			index := child.Eq(DISTRICT_INDEX).Text()
+			totalVillage := strings.ReplaceAll(child.Eq(DISTRICT_TOTAL_VILLAGE).Text(), ".", "")
+			totalIsland := strings.ReplaceAll(child.Eq(DISTRICT_TOTAL_ISLAND).Text(), ".", "")
+			postalCode := strings.Split(child.Eq(DISTRICT_POSTAL_CODE).Text(), " - ")
+			areaCode := child.Eq(DISTRICT_AREA_CODE).Text()
+
+			err := writer.Write([]string{
+				(index),
+				name,
+				(totalVillage),
+				(totalIsland),
+				areaCode,
+				strings.Join(postalCode, "-"),
+			})
+
+			if err != nil {
+				log.Fatalln("Failed to write CSV row:", err)
+			}
 		})
 
-		if err != nil {
-			log.Fatalln("Failed to write CSV row:", err)
-		}
 	})
 
-	writer.Flush()
+	c.Visit(url)
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gocolly/colly/v2"
+	"github.com/ilyasa1211/indonesia-area/utils"
 )
 
 type CityType string
@@ -36,41 +37,48 @@ const (
 	CITY_AREA_CODE
 )
 
-func ScrapeCity(e *colly.HTMLElement, writer *csv.Writer) {
-	cityCount := e.DOM.Children().Length() - 1
+func ScrapeCity(c *colly.Collector, url string, selector string, writer *csv.Writer) {
+	utils.SetProperHeader(c)
+	utils.SetErrorHandling(c)
 
-	e.ForEach("tr", func(i int, h *colly.HTMLElement) {
-		// skip last row
-		if i >= cityCount {
-			return
-		}
+	defer writer.Flush()
 
-		child := h.DOM.Children()
+	c.OnHTML(selector, func(e *colly.HTMLElement) {
+		cityCount := e.DOM.Children().Length()
 
-		name := child.Eq(CITY_NAME).Text()
-		index := child.Eq(CITY_INDEX).Text()
-		cityType := child.Eq(CITY_TYPE).Text()
+		e.ForEach("tr", func(i int, h *colly.HTMLElement) {
+			// skip last row
+			if i >= cityCount {
+				return
+			}
 
-		totalDistrict := child.Eq(CITY_TOTAL_DISTRICT).Text()
-		totalVillage := strings.ReplaceAll(child.Eq(CITY_TOTAL_VILLAGE).Text(), ".", "")
-		totalIsland := strings.ReplaceAll(child.Eq(CITY_TOTAL_ISLAND).Text(), ".", "")
+			child := h.DOM.Children()
 
-		areaCode := child.Eq(CITY_AREA_CODE).Text()
+			name := child.Eq(CITY_NAME).Text()
+			index := child.Eq(CITY_INDEX).Text()
+			cityType := child.Eq(CITY_TYPE).Text()
 
-		err := writer.Write([]string{
-			(index),
-			cityType,
-			name,
-			(totalDistrict),
-			(totalVillage),
-			(totalIsland),
-			areaCode,
+			totalDistrict := child.Eq(CITY_TOTAL_DISTRICT).Text()
+			totalVillage := strings.ReplaceAll(child.Eq(CITY_TOTAL_VILLAGE).Text(), ".", "")
+			totalIsland := strings.ReplaceAll(child.Eq(CITY_TOTAL_ISLAND).Text(), ".", "")
+
+			areaCode := child.Eq(CITY_AREA_CODE).Text()
+
+			err := writer.Write([]string{
+				(index),
+				cityType,
+				name,
+				(totalDistrict),
+				(totalVillage),
+				(totalIsland),
+				areaCode,
+			})
+
+			if err != nil {
+				log.Fatalln("failed to write city csv: ", err)
+			}
 		})
-
-		if err != nil {
-			log.Fatalln("failed to write city csv: ", err)
-		}
 	})
 
-	writer.Flush()
+	c.Visit(url)
 }
