@@ -21,10 +21,6 @@ type DistrictData struct {
 	ProvinceAreaCode string
 }
 
-// 1 https://www.nomor.net/_kodepos.php?_i=kecamatan-kodepos&daerah=&jobs=&perhal=1000&urut=&asc=001000&sby=010000&no1=2
-// 2 https://www.nomor.net/_kodepos.php?_i=kecamatan-kodepos&daerah=&jobs=&perhal=1000&urut=&asc=001000&sby=010000&no1=1&no2=1000&kk=2
-// 3 https://www.nomor.net/_kodepos.php?_i=kecamatan-kodepos&daerah=&jobs=&perhal=1000&urut=&asc=001000&sby=010000&no1=1001&no2=2000&kk=3
-
 const (
 	DISTRICT_INDEX = iota
 	DISTRICT_NAME
@@ -34,7 +30,7 @@ const (
 	DISTRICT_AREA_CODE
 )
 
-func ScrapeDistrict(c *colly.Collector, url string, selector string, writer csv.Writer) {
+func ScrapeDistrict(c *colly.Collector, url string, selector string, writer *csv.Writer) {
 	utils.SetProperHeader(c)
 	utils.SetErrorHandling(c)
 
