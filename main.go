@@ -41,7 +41,7 @@ func setupCallback(c *colly.Collector) {
 }
 
 func getAreaCount(co *colly.Collector, fetchType common.FetchType) int {
-	return scraper.GetDataCount(
+	return common.GetDataCount(
 		co.Clone(),
 		common.GetURL(fetchType, 1, 1).String(),
 		common.HTML_DATA_COUNT_SELECTOR,

@@ -16,7 +16,8 @@
 			"extensions": [
 				"docker.docker",
 				"ms-azuretools.vscode-docker",
-				"golang.Go"
+				"golang.Go",
+				"mechatroner.rainbow-csv"
 			]
 		}
 	}
