@@ -7,15 +7,13 @@ import (
 	"strings"
 
 	"github.com/gocolly/colly/v2"
-	"github.com/ilyasa1211/indonesia-area/utils"
 )
 
-func GetDataCount(c *colly.Collector, url string, selector string) uint {
-	var count uint
+func GetDataCount(c *colly.Collector, url string, selector string) int {
+	var count int
 	done := make(chan struct{})
 
 	fmt.Println(url)
-	utils.SetProperHeader(c)
 
 	c.OnError(func(r *colly.Response, err error) {
 		if r.StatusCode == 403 {
@@ -29,7 +27,7 @@ func GetDataCount(c *colly.Collector, url string, selector string) uint {
 		text := strings.ReplaceAll(strings.TrimSpace(h.Text), ".", "")
 		parsed, err := strconv.Atoi(text)
 		if err == nil {
-			count = uint(parsed)
+			count = parsed
 		}
 		close(done)
 	})

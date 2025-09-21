@@ -1,81 +1,118 @@
 package main
 
 import (
-	"encoding/csv"
-	"fmt"
 	"log"
 	"math"
+	"net/http"
+	"path"
 
 	"github.com/gocolly/colly/v2"
-	"github.com/ilyasa1211/indonesia-area/config"
-	"github.com/ilyasa1211/indonesia-area/scraper"
-	"github.com/ilyasa1211/indonesia-area/types"
-	"github.com/ilyasa1211/indonesia-area/utils"
+	"github.com/ilyasa1211/indonesia-area/internal/common"
+	"github.com/ilyasa1211/indonesia-area/internal/scraper"
+	"github.com/ilyasa1211/indonesia-area/internal/writer"
 )
 
-func main() {
-	co := colly.NewCollector(func(c *colly.Collector) {
-	})
-
-	provinceFile := utils.OpenFile("out/csv/provinces.csv")
-	cityFile := utils.OpenFile("out/csv/cities.csv")
-	districtFile := utils.OpenFile("out/csv/districts.csv")
-	villageFile := utils.OpenFile("out/csv/villages.csv")
-
-	defer provinceFile.Close()
-	defer cityFile.Close()
-	defer districtFile.Close()
-	defer villageFile.Close()
-
-	provinceWriter := csv.NewWriter(provinceFile)
-	cityWriter := csv.NewWriter(cityFile)
-	districtWriter := csv.NewWriter(districtFile)
-	villageWriter := csv.NewWriter(villageFile)
-
-	co.OnError(func(r *colly.Response, err error) {
-		/**
-		* for some unkown reason, it sometimes return error.
-		* it could be from cloudflare's protection.
-		* retry if error
-		 */
-		if r.StatusCode == 403 {
+func setupCallback(c *colly.Collector) {
+	c.OnError(func(r *colly.Response, err error) {
+		// for some unkown reason, it sometimes return error.
+		// it could be from cloudflare's protection.
+		// retry if error
+		if r.StatusCode == http.StatusForbidden {
 			log.Println("error with code forbidden, will retry")
 			r.Request.Visit(r.Request.URL.String())
 
 			return
 		}
+
 		log.Println("Something went wrong:", r.StatusCode, r, err)
 	})
 
-	provinceCount := scraper.GetDataCount(co.Clone(), utils.GetURL(types.FETCH_TYPE_PROVINCE, 1, 1).String(), config.HTML_DATA_COUNT_SELECTOR)
-	cityCount := scraper.GetDataCount(co.Clone(), utils.GetURL(types.FETCH_TYPE_CITY, 1, 1).String(), config.HTML_DATA_COUNT_SELECTOR)
-	districtCount := scraper.GetDataCount(co.Clone(), utils.GetURL(types.FETCH_TYPE_DISTRICT, 1, 1).String(), config.HTML_DATA_COUNT_SELECTOR)
-	villageCount := scraper.GetDataCount(co.Clone(), utils.GetURL(types.FETCH_TYPE_VILLAGE, 1, 1).String(), config.HTML_DATA_COUNT_SELECTOR)
+	c.OnRequest(func(r *colly.Request) {
+		header := r.Headers
 
-	fmt.Println([]int{
-		int(provinceCount),
-		int(cityCount),
-		int(districtCount),
-		int(villageCount),
+		header.Add("User-Agent", common.FAKE_USER_AGENT)
+		header.Add("Accept", "text/html")
+		header.Add("Accept-Language", "en-US,en;")
+		header.Add("Upgrade-Insecure-Requests", "1")
+		header.Add("Sec-Fetch-Dest", "document")
+		header.Add("Sec-Fetch-Mode", "navigate")
+		header.Add("Sec-Fetch-Site", "same-origin")
+	})
+}
+
+func getAreaCount(co *colly.Collector, fetchType common.FetchType) int {
+	return scraper.GetDataCount(
+		co.Clone(),
+		common.GetURL(fetchType, 1, 1).String(),
+		common.HTML_DATA_COUNT_SELECTOR,
+	)
+}
+
+func scrapeArea[T any, U any](
+	co *colly.Collector,
+	fetchType common.FetchType,
+	perPage int,
+	totalCount int,
+	scrapeFunc func(*colly.Collector, string, string) []T,
+	writers ...common.FileWriter[U],
+) {
+	pages := int(math.Ceil(float64(totalCount) / float64(perPage)))
+
+	c := make(chan bool)
+
+	go func() {
+		res := make([]T, 0)
+		for page := 1; page <= pages; page++ {
+			url := common.GetURL(fetchType, page, perPage).String()
+			c := co.Clone()
+			setupCallback(c)
+			data := scrapeFunc(c, url, common.HTML_DATA_SELECTOR)
+
+			res = append(res, data...)
+		}
+
+		for _, w := range writers {
+			file := common.OpenFile(path.Join(common.OUT_DIR, common.FetchTypeToName[fetchType]+w.GetExtension()))
+			defer file.Close()
+
+			err := w.Write(file, any(res).(U))
+
+			if err != nil {
+				log.Fatalln("Failed to write file:", err)
+			}
+		}
+
+		c <- true
+	}()
+
+	<-c
+}
+
+func main() {
+	co := colly.NewCollector(func(c *colly.Collector) {
 	})
 
-	perPage := config.MAX_DATA_PER_PAGE
+	setupCallback(co)
 
-	p := math.Ceil(float64(provinceCount) / float64(perPage))
-	c := math.Ceil(float64(cityCount) / float64(perPage))
-	d := math.Ceil(float64(districtCount) / float64(perPage))
-	v := math.Ceil(float64(villageCount) / float64(perPage))
+	provinceCount := getAreaCount(co, common.FETCH_TYPE_PROVINCE)
+	cityCount := getAreaCount(co, common.FETCH_TYPE_CITY)
+	districtCount := getAreaCount(co, common.FETCH_TYPE_DISTRICT)
+	villageCount := getAreaCount(co, common.FETCH_TYPE_VILLAGE)
 
-	for i := 1; i <= int(p); i++ {
-		scraper.ScrapeProvince(co.Clone(), utils.GetURL(types.FETCH_TYPE_PROVINCE, uint(i), uint(perPage)).String(), config.HTML_DATA_SELECTOR, provinceWriter)
-	}
-	for i := 1; i <= int(c); i++ {
-		scraper.ScrapeCity(co.Clone(), utils.GetURL(types.FETCH_TYPE_CITY, uint(i), uint(perPage)).String(), config.HTML_DATA_SELECTOR, cityWriter)
-	}
-	for i := 1; i <= int(d); i++ {
-		scraper.ScrapeDistrict(co.Clone(), utils.GetURL(types.FETCH_TYPE_DISTRICT, uint(i), uint(perPage)).String(), config.HTML_DATA_SELECTOR, districtWriter)
-	}
-	for i := 1; i <= int(v); i++ {
-		scraper.ScrapeVillage(co.Clone(), utils.GetURL(types.FETCH_TYPE_VILLAGE, uint(i), uint(perPage)).String(), config.HTML_DATA_SELECTOR, villageWriter)
-	}
+	perPage := common.MAX_DATA_PER_PAGE
+
+	jsonWriter := writer.NewJSONWriter(common.JSON_INDENT_SIZE)
+	csvWriter := writer.NewCSVWriter(common.CSV_COMMA, nil)
+
+	csvWriter.SetHeaders([]string{"index", "name", "total_regency_and_city", "total_regency", "total_city", "total_district", "total_village", "total_island", "area_code"})
+	scrapeArea(co, common.FETCH_TYPE_PROVINCE, perPage, provinceCount, scraper.ScrapeProvince, csvWriter, jsonWriter)
+
+	csvWriter.SetHeaders([]string{"index", "name", "province", "total_district", "total_village", "area_code"})
+	scrapeArea(co, common.FETCH_TYPE_CITY, perPage, cityCount, scraper.ScrapeCity, csvWriter, jsonWriter)
+
+	csvWriter.SetHeaders([]string{"index", "name", "city", "province", "total_village", "area_code"})
+	scrapeArea(co, common.FETCH_TYPE_DISTRICT, perPage, districtCount, scraper.ScrapeDistrict, csvWriter, jsonWriter)
+
+	csvWriter.SetHeaders([]string{"index", "name", "district", "city", "province", "area_code"})
+	scrapeArea(co, common.FETCH_TYPE_VILLAGE, perPage, villageCount, scraper.ScrapeVillage, csvWriter, jsonWriter)
 }

@@ -1,18 +1,17 @@
 package scraper
 
 import (
-	"encoding/csv"
 	"log"
+	"strconv"
 
 	"github.com/gocolly/colly/v2"
-	"github.com/ilyasa1211/indonesia-area/utils"
 )
 
 type VillageData struct {
-	Index      int // start from 1
-	PostalCode string
-	Name       string
-	AreaCode   string
+	Index      int    `json:"index"` // start from 1
+	PostalCode string `json:"postal_code"`
+	Name       string `json:"name"`
+	AreaCode   string `json:"area_code"`
 
 	DistrictAreaCode string
 	CityAreaCode     string
@@ -26,11 +25,8 @@ const (
 	VILLAGE_AREA_CODE
 )
 
-func ScrapeVillage(c *colly.Collector, url string, selector string, writer *csv.Writer) {
-	utils.SetProperHeader(c)
-	utils.SetErrorHandling(c)
-
-	defer writer.Flush()
+func ScrapeVillage(c *colly.Collector, url string, selector string) []VillageData {
+	out := make([]VillageData, 0)
 
 	c.OnHTML(selector, func(e *colly.HTMLElement) {
 		villageCount := e.DOM.Children().Length()
@@ -47,19 +43,23 @@ func ScrapeVillage(c *colly.Collector, url string, selector string, writer *csv.
 			postalCode := child.Eq(VILLAGE_POSTAL_CODE).Text()
 			areaCode := child.Eq(VILLAGE_AREA_CODE).Text()
 
-			err := writer.Write([]string{
-				index,
-				name,
-				postalCode,
-				areaCode,
-			})
+			indexInt, err := strconv.Atoi(index)
 
 			if err != nil {
-				log.Fatalln("Failed to write CSV row:", err)
+				log.Fatalln("Failed to convert index to int:", err)
 			}
+
+			out = append(out, VillageData{
+				Index:      indexInt,
+				Name:       name,
+				PostalCode: postalCode,
+				AreaCode:   areaCode,
+			})
 		})
 
 	})
 
 	c.Visit(url)
+
+	return out
 }
