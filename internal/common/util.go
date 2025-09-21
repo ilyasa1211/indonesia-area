@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -75,7 +76,7 @@ func GetDataCount(c *colly.Collector, url string, selector string) int {
 	fmt.Println(url)
 
 	c.OnError(func(r *colly.Response, err error) {
-		if r.StatusCode == 403 {
+		if r.StatusCode == http.StatusForbidden {
 			log.Println("got forbidden, retrying")
 			c.Visit(url) // Retry once on 403
 		}
